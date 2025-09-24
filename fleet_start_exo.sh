@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-for host in $(grep -v '^\s*#' "${1:-hosts.txt}"); do
+HOSTS_FILE="${1:-hosts.txt}"
+
+for host in $(grep -v '^\s*#' "$HOSTS_FILE"); do
   echo "=== $host ==="
-  ssh -tt "$host" '
-    set -e
-    cd /opt/exo
-    /nix/var/nix/profiles/default/bin/nix develop . \
+  ssh -n "$host" '
+    mkdir -p ~/Library/Logs
+    cd /opt/exo || exit 1
+    nohup nix develop . \
       --accept-flake-config \
       --extra-experimental-features "nix-command flakes" \
-      --command uv run exo
+      --command uv run exo \
+      >>~/Library/Logs/exo.log 2>>~/Library/Logs/exo.err &
+    disown || true
+    echo "[remote] started exo, logging to ~/Library/Logs/exo.log and exo.err"
   '
 done
