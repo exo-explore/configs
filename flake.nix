@@ -58,12 +58,7 @@
               home = "/Users/${userName}";
               isHidden = false;
               shell = pkgs.zsh;
-              # NEW: add user to 'exo' group (created below) for /opt/exo write where needed
-              extraGroups = [ "staff" "exo" ];
             };
-
-            # NEW: dedicated group for EXO-managed artifacts
-            users.groups.exo = {};
 
             # ----- SSH (passwords allowed; also support /etc per-user authorized_keys) -----
             services.openssh = {
@@ -141,26 +136,15 @@
               serviceConfig = { RunAtLoad = true; };
             };
 
-            # ----- EXO: proper /opt/exo + logging (root-owned, setgid to 'exo') -----
-            # UPDATED: create /opt/exo owned by root:exo with 2775 (setgid so files inherit 'exo' group)
-            #          create /var/log/exo with group write so the user daemon can log there
-            system.activationScripts.exoBase.text = ''
-              # /opt/exo directory for repo/runtime
-              /usr/bin/install -d -o root -g exo -m 2775 /opt/exo
+            # ----- EXO service: run from /opt/exo as user, user-owned logs -----
+            system.activationScripts.exoDirs.text = ''
+              # create /opt/exo owned by the login user
+              /usr/bin/install -d -o ${userName} -g staff -m 0755 /opt/exo
 
-              # logs dir
-              /usr/bin/install -d -o root -g exo -m 2775 /var/log/exo
-              # touch log files with group write so UserName=${userName} can append
-              /usr/bin/touch /var/log/exo/exo.log /var/log/exo/exo.err
-              /usr/bin/chown root:exo /var/log/exo/exo.log /var/log/exo/exo.err
-              /bin/chmod 0664 /var/log/exo/exo.log /var/log/exo/exo.err
-
-              # ensure user's ~/Library/Logs exists for other jobs that log there
+              # ensure user log dir exists (service logs here)
               /bin/mkdir -p /Users/${userName}/Library/Logs
               /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
-
-            # UPDATED: run EXO service from /opt/exo as ${userName}
             launchd.daemons."org.nixos.exo-service" = {
               command = "${pkgs.uv}/bin/uv run exo";
               serviceConfig = {
@@ -168,8 +152,8 @@
                 WorkingDirectory = "/opt/exo";        # run inside repo
                 RunAtLoad = true;
                 KeepAlive = true;
-                StandardOutPath = "/var/log/exo/exo.log";
-                StandardErrorPath = "/var/log/exo/exo.err";
+                StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
+                StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
                 ProcessType = "Background";
                 EnvironmentVariables = { PYTHONUNBUFFERED = "1"; };
               };
@@ -232,7 +216,7 @@
           # --- IP config LaunchDaemon (reads scripts/exo-config-ip.sh) ---
           (import ./modules/exo-config-ip.nix)
 
-          # --- Repo sync LaunchDaemon (reads scripts/exo-repo-sync.sh) ---
+          # --- Repo sync LaunchDaemon (reads scripts/exo-repo-sync.nix) ---
           (import ./modules/exo-repo-sync.nix)
 
           # --- per-host overrides ---
@@ -250,7 +234,6 @@
               mkdir -p /Users/${userName}/Library/Logs
               chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
-            # UPDATED: Keep EXO_REPO_DEST at /opt/exo
             launchd.daemons."exo-repo-sync".serviceConfig = {
               UserName = userName;
               RunAtLoad = true;
@@ -261,9 +244,9 @@
                 EXO_REPO_URL_SSH   = "git@github.com:exo-explore/exo-v2.git";
                 EXO_REPO_URL_HTTPS = "https://github.com/exo-explore/exo-v2.git";
                 EXO_REPO_BRANCH    = "big-refactor";
-                EXO_REPO_DEST      = "/opt/exo";     # stays on /opt/exo
-                EXO_REPO_OWNER     = userName;       # repo ownership
-                EXO_DEPLOY_KEY     = "";             # empty -> PAT/HTTPS path used by script
+                EXO_REPO_DEST      = "/opt/exo";
+                EXO_REPO_OWNER     = userName;   # repo ownership
+                EXO_DEPLOY_KEY     = "";         # empty -> PAT/HTTPS path used by script
               };
             };
           })
