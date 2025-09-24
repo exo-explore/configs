@@ -134,33 +134,33 @@
               /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
 
-            # ----- EXO: idiomatic LaunchAgent (no shell, no wrapper) -----
-            launchd.agents."org.nixos.exo-service" = {
-              # Optional PATH for the process
-              path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
+            # headless/always-on service: system LaunchDaemon (runs as the login user)
+            launchd.daemons."org.nixos.exo-service" = {
+            path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
+            serviceConfig = {
+              UserName = userName;                 # run as the login user
+              WorkingDirectory = "/opt/exo";
 
-              serviceConfig = {
-                # Idiomatic: no shell, exec nix directly with arguments
-                ProgramArguments = [
+              ProgramArguments = [
                 "${pkgs.nix}/bin/nix"
                 "develop" "."
                 "--accept-flake-config"
                 "--extra-experimental-features" "nix-command flakes"
                 "--command" "${pkgs.uv}/bin/uv" "run" "exo"
-                ];
+              ];
 
-                WorkingDirectory = "/opt/exo";
-                RunAtLoad = true;
-                KeepAlive = true;
-                StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
-                StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
-                ProcessType = "Background";
-                EnvironmentVariables = {
+              RunAtLoad = true;
+              KeepAlive = true;
+
+              StandardOutPath  = "/Users/${userName}/Library/Logs/exo.log";
+              StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
+              ProcessType = "Background";
+              EnvironmentVariables = {
                 PYTHONUNBUFFERED = "1";
                 TERM = "dumb";
-                EXO_NONINTERACTIVE = "1";
-                };
+                EXO_NONINTERACTIVE = "1";  # if your devShell shellHook respects this to stay quiet
               };
+            };
             };
 
 
