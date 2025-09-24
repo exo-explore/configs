@@ -58,7 +58,7 @@ while read -r _ target; do
   rm -f "$tmpkey"
 
   # 1b) append key, set perms, and install a sudoers drop-in for the remote user
-  #     Use -tt so sudo can prompt this one time.
+  #     IMPORTANT: no `-n` here; do use `-tt` so sudo can read the password.
   ssh -tt "${SSH_BOOT[@]}" "$target" "bash -lc '
     set -e
     umask 077
@@ -72,18 +72,21 @@ while read -r _ target; do
     chmod 700 ~/.ssh
     chmod 600 ~/.ssh/authorized_keys
 
-    # Install passwordless sudo for the current login user (catch-all: ALL commands)
-    me=\$(id -un)
-    # Ensure sudo includes /etc/sudoers.d
-    if ! grep -q \"#includedir /etc/sudoers.d\" /etc/sudoers; then
+    # Cache sudo credentials (will prompt once, with working TTY)
+    sudo -v
+
+    # Ensure sudo reads drop-ins; check as root to avoid permission errors
+    if ! sudo grep -q \"#includedir /etc/sudoers.d\" /etc/sudoers; then
       echo \"#includedir /etc/sudoers.d\" | sudo tee -a /etc/sudoers >/dev/null
     fi
-    tmp_sudofile=\$(mktemp)
-    # Catch-all: no-password for ALL commands for this user
-    printf \"%s ALL=(ALL) NOPASSWD: ALL\\n\" \"\$me\" > \"\$tmp_sudofile\"
-    sudo install -m 440 \"\$tmp_sudofile\" /etc/sudoers.d/exo-nopasswd-\"\$me\"
-    rm -f \"\$tmp_sudofile\"
+
+    # Catch-all NOPASSWD for this user; validate with visudo for safety
+    me=\$(id -un)
+    echo \"\${me} ALL=(ALL) NOPASSWD: ALL\" | sudo tee /etc/sudoers.d/exo-nopasswd-\${me} >/dev/null
+    sudo chmod 440 /etc/sudoers.d/exo-nopasswd-\${me}
+    sudo visudo -cf /etc/sudoers >/dev/null
   '"
+
 done < "$norm_list"
 
 # From here on, key-only + non-interactive sudo.
