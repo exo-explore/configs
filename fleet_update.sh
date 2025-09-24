@@ -137,4 +137,3 @@ fi
 
 rm -f "$norm_list" "$runner"
 echo "All done."
-

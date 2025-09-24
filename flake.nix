@@ -263,9 +263,108 @@
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
       ];
     };
+    darwinConfigurations."a1" = mkHost {
+      hostName = "a1s-mac-studio";
+      userName = "a1";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a2" = mkHost {
+      hostName = "a2s-mac-studio";
+      userName = "a2";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a3" = mkHost {
+      hostName = "a3s-mac-studio";
+      userName = "a3";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
     darwinConfigurations."a4" = mkHost {
       hostName = "a4s-mac-studio";
       userName = "a4";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a5" = mkHost {
+      hostName = "a5s-mac-studio";
+      userName = "a5";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a6" = mkHost {
+      hostName = "a6s-mac-studio";
+      userName = "a6";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a7" = mkHost {
+      hostName = "a7s-mac-studio";
+      userName = "a7";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a8" = mkHost {
+      hostName = "a8s-mac-studio";
+      userName = "a8";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a9" = mkHost {
+      hostName = "a9s-mac-studio";
+      userName = "a9";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a10" = mkHost {
+      hostName = "a10s-mac-studio";
+      userName = "a10";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a11" = mkHost {
+      hostName = "a11s-mac-studio";
+      userName = "a11";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a12" = mkHost {
+      hostName = "a12s-mac-studio";
+      userName = "a12";
       userEmail = "eng@exolabs.net";
       system   = "aarch64-darwin";
       authorizedPubKeys = [
