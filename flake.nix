@@ -78,27 +78,27 @@
               '';
             };
 
-            # Install authorized keys for the login user (can be multiple lines)
-            environment.etc."ssh/authorized_keys/${userName}".text =
-              lib.concatStringsSep "\n" authorizedPubKeys + "\n";
-
-            # Extra users' authorized keys (optional)
-            environment.etc = lib.mkMerge (
-              lib.mapAttrsToList
-                (uname: keys: {
-                  name  = "ssh/authorized_keys/${uname}";
-                  value = { text = lib.concatStringsSep "\n" keys + "\n"; };
-                })
-                extraAuthorizedKeys
-            );
-
-            # ----- sudo w/o password for admin (ops convenience) -----
-            environment.etc."sudoers.d/10-admin-nopasswd".text = ''
-              %admin ALL=(ALL) NOPASSWD: ALL
-            '';
-
-            # avoid pam symlink issues on some macOS
-            environment.etc."pam.d/sudo_local".enable = lib.mkForce false;
+            # Combine all /etc entries in one attribute to avoid conflicts
+            environment.etc = lib.mkMerge [
+              # base entries
+              {
+                "ssh/authorized_keys/${userName}".text = lib.concatStringsSep "\n" authorizedPubKeys + "\n";
+                "sudoers.d/10-admin-nopasswd".text = ''
+                  %admin ALL=(ALL) NOPASSWD: ALL
+                '';
+                # avoid pam symlink issues on some macOS
+                "pam.d/sudo_local".enable = lib.mkForce false;
+              }
+              # extra users' authorized keys (optional)
+              (lib.listToAttrs (
+                lib.mapAttrsToList
+                  (uname: keys: {
+                    name  = "ssh/authorized_keys/${uname}";
+                    value = { text = lib.concatStringsSep "\n" keys + "\n"; };
+                  })
+                  extraAuthorizedKeys
+              ))
+            ];
 
             # ----- Tailscale -----
             services.tailscale.enable = true;
