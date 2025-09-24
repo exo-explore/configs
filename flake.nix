@@ -2,21 +2,20 @@
   description = "EXO macOS fleet via nix-darwin (+ Home Manager) with IP + repo sync daemons (SSH passwords allowed, multi-pubkey)";
 
   inputs = {
-    nixpkgs.url       = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    darwin.url        = "github:LnL7/nix-darwin";
-    home-manager.url  = "github:nix-community/home-manager";
+    nixpkgs.url      = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    darwin.url       = "github:LnL7/nix-darwin";
+    home-manager.url = "github:nix-community/home-manager";
   };
 
   outputs = { self, nixpkgs, darwin, home-manager, ... }:
   let
-    # mkHost supports multiple SSH pubkeys for the login user, and extra keys for other users.
     mkHost = {
       hostName,
       userName,
       userEmail ? "eng@exolabs.net",
       system   ? "aarch64-darwin",
-      authorizedPubKeys ? [],                     # list of public key lines for ${userName}
-      extraAuthorizedKeys ? {}                    # attrset: { "otheruser" = [ "ssh-ed25519 ...", ... ]; }
+      authorizedPubKeys ? [],
+      extraAuthorizedKeys ? {}
     }:
       darwin.lib.darwinSystem {
         inherit system;
@@ -24,17 +23,15 @@
           home-manager.darwinModules.home-manager
 
           ({ pkgs, lib, ... }: {
-            # ----- required by nix-darwin -----
+            # ----- nix-darwin base -----
             system.stateVersion = 5;
             system.primaryUser  = userName;
 
-            # share pkgs between HM and system
             home-manager.useGlobalPkgs   = true;
             home-manager.useUserPackages = true;
 
             networking.hostName = hostName;
 
-            # ----- Nix -----
             nix = {
               package = pkgs.nix;
               settings = {
@@ -47,20 +44,18 @@
               };
             };
 
-            # ----- base tools -----
             programs.zsh.enable = true;
             environment.systemPackages = with pkgs; [
               git uv direnv nix-direnv coreutils jq tmux htop
             ];
 
-            # ensure local macOS user exists
             users.users.${userName} = {
               home = "/Users/${userName}";
               isHidden = false;
               shell = pkgs.zsh;
             };
 
-            # ----- SSH (passwords allowed; also support /etc per-user authorized_keys) -----
+            # ----- SSH (password login allowed) -----
             services.openssh = {
               enable = true;
               extraConfig = ''
@@ -68,28 +63,23 @@
                 PasswordAuthentication yes
                 KbdInteractiveAuthentication yes
                 UsePAM yes
-                # hardening while keeping passwords on
                 MaxAuthTries 3
                 LoginGraceTime 30s
                 MaxStartups 10:30:60
                 PermitEmptyPasswords no
-                # read per-user keys from /etc too
                 AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys2 /etc/ssh/authorized_keys/%u
               '';
             };
 
-            # Combine all /etc entries in one attribute to avoid conflicts
+            # /etc entries (+ extra per-user authorized_keys)
             environment.etc = lib.mkMerge [
-              # base entries
               {
                 "ssh/authorized_keys/${userName}".text = lib.concatStringsSep "\n" authorizedPubKeys + "\n";
                 "sudoers.d/10-admin-nopasswd".text = ''
                   %admin ALL=(ALL) NOPASSWD: ALL
                 '';
-                # avoid pam symlink issues on some macOS
                 "pam.d/sudo_local".enable = lib.mkForce false;
               }
-              # extra users' authorized keys (optional)
               (lib.listToAttrs (
                 lib.mapAttrsToList
                   (uname: keys: {
@@ -100,7 +90,6 @@
               ))
             ];
 
-            # Safely migrate any pre-existing /etc/ssh/authorized_keys/* files once
             system.activationScripts.migrateEtcAuthorizedKeys.text =
               (let users = [ userName ] ++ (builtins.attrNames extraAuthorizedKeys);
                in ''
@@ -113,15 +102,14 @@
                  done
                '');
 
-            # ----- Tailscale -----
             services.tailscale.enable = true;
 
-            # ----- power: stay awake -----
+            # Stay awake
             system.activationScripts.power.text = ''
               /usr/bin/pmset -a sleep 0 displaysleep 0 disksleep 0 >/dev/null 2>&1 || true
             '';
 
-            # ----- migrate pre-existing /etc files that nix-darwin will manage -----
+            # Migrate common /etc files once
             system.activationScripts.migrateEtcBase.text = ''
               for f in /etc/nix/nix.conf /etc/bashrc /etc/zshrc; do
                 if [ -e "$f" ] && [ ! -L "$f" ]; then
@@ -130,37 +118,48 @@
               done
             '';
 
-            # ----- best-effort sysctl (may be read-only) -----
+            # Example tunable
             launchd.daemons."sysctl-tunables" = {
               command = ''${pkgs.bash}/bin/bash -lc '/usr/sbin/sysctl -w net.inet.tcp.msl=1000 || true' '';
               serviceConfig = { RunAtLoad = true; };
             };
 
-            # ----- EXO service: run from /opt/exo as user, user-owned logs -----
-            system.activationScripts.exoDirs.text = ''
-              # create /opt/exo owned by the login user
-              /usr/bin/install -d -o ${userName} -g staff -m 0755 /opt/exo
+            # ----- EXO: ensure dirs, logs, wrapper -----
+            system.activationScripts.exoRunner.text = ''
+              LOG_DIR="/Users/${userName}/Library/Logs"
+              LOG_OUT="$LOG_DIR/exo.log"
+              LOG_ERR="$LOG_DIR/exo.err"
 
-              # ensure user log dir exists (service logs here)
-              /bin/mkdir -p /Users/${userName}/Library/Logs
-              /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
+              /bin/mkdir -p /opt/exo
+              /usr/sbin/chown -R ${userName}:staff /opt/exo || true
+
+              /bin/mkdir -p "$LOG_DIR"
+              /usr/sbin/chown ${userName}:staff "$LOG_DIR" || true
+              /usr/bin/touch "$LOG_OUT" "$LOG_ERR"
+              /usr/sbin/chown ${userName}:staff "$LOG_OUT" "$LOG_ERR" || true
+
+              cat > /opt/exo/.run-exo.sh <<'SH'
+              #!/usr/bin/env bash
+              set -euo pipefail
+              echo "[$(date -u +%FT%TZ)] starting exo via nix develop + uv run exo" >&2
+              cd /opt/exo
+              export EXO_NONINTERACTIVE=1
+              export TERM=dumb
+              export PYTHONUNBUFFERED=1
+              exec nix develop . \
+                --accept-flake-config \
+                --extra-experimental-features "nix-command flakes" \
+                --command uv run exo
+              SH
+              /bin/chmod +x /opt/exo/.run-exo.sh
             '';
-            
+
+            # ----- Auto-start EXO as a LaunchAgent (user domain) -----
             launchd.agents."org.nixos.exo-service" = {
-              # Run your exact command inside the repo's devShell
-              command = ''
-                ${pkgs.bash}/bin/bash -lc '
-                  cd /opt/exo
-                  ${pkgs.nix}/bin/nix develop . \
-                    --accept-flake-config \
-                    --extra-experimental-features "nix-command flakes" \
-                    --command uv run exo
-                '
-              '';
-            
+              command = "${pkgs.bash}/bin/bash -lc '/opt/exo/.run-exo.sh'";
               serviceConfig = {
-                RunAtLoad = true;                # start at login
-                KeepAlive = true;                # restart if it exits
+                RunAtLoad = true;
+                KeepAlive = true;
                 WorkingDirectory = "/opt/exo";
                 StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
                 StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
@@ -168,7 +167,7 @@
                 EnvironmentVariables = {
                   PYTHONUNBUFFERED = "1";
                   TERM = "dumb";
-                  EXO_NONINTERACTIVE = "1";      # quiets noisy shellHooks if you gate on this
+                  EXO_NONINTERACTIVE = "1";
                 };
               };
             };
@@ -222,28 +221,25 @@
 
               home.shellAliases = {
                 exo-dev     = "nix develop -c uv run exo";
-                exo-restart = "sudo launchctl kickstart -k system/org.nixos.exo-service";
+                exo-restart = "launchctl kickstart -k gui/$(id -u)/org.nixos.exo-service";
               };
             };
           })
 
-          # --- IP config LaunchDaemon (reads scripts/exo-config-ip.sh) ---
+          # --- EXO modules you already use ---
           (import ./modules/exo-config-ip.nix)
-
-          # --- Repo sync LaunchDaemon (reads scripts/exo-repo-sync.nix) ---
           (import ./modules/exo-repo-sync.nix)
 
-          # --- per-host overrides ---
+          # --- Per-host overrides ---
           ({ lib, ... }: {
-            # IP config defaults (override per host if needed)
             launchd.daemons."exo-config-ip".serviceConfig.EnvironmentVariables = {
               WIFI_SERVICE = "Wi-Fi";
               LAN_PREFIX   = "192.168.1";
               NETMASK      = "255.255.255.0";
-              # WIRED_SERVICE = "Thunderbolt Ethernet"; # optional pin
+              # WIRED_SERVICE = "Thunderbolt Ethernet";
             };
 
-            # Repo sync: run as user, log to user dir, keep /opt/exo on latest origin/big-refactor via PAT (System or login keychain)
+            # Repo sync as user -> /opt/exo
             system.activationScripts.repoLogs.text = ''
               mkdir -p /Users/${userName}/Library/Logs
               chown ${userName}:staff /Users/${userName}/Library/Logs || true
@@ -251,7 +247,7 @@
             launchd.daemons."exo-repo-sync".serviceConfig = {
               UserName = userName;
               RunAtLoad = true;
-              StartInterval = 900;  # every 15 min
+              StartInterval = 900;
               StandardOutPath  = lib.mkForce "/Users/${userName}/Library/Logs/exo-repo-sync.log";
               StandardErrorPath = lib.mkForce "/Users/${userName}/Library/Logs/exo-repo-sync.err";
               EnvironmentVariables = {
@@ -259,8 +255,8 @@
                 EXO_REPO_URL_HTTPS = "https://github.com/exo-explore/exo-v2.git";
                 EXO_REPO_BRANCH    = "big-refactor";
                 EXO_REPO_DEST      = "/opt/exo";
-                EXO_REPO_OWNER     = userName;   # repo ownership
-                EXO_DEPLOY_KEY     = "";         # empty -> PAT/HTTPS path used by script
+                EXO_REPO_OWNER     = userName;
+                EXO_DEPLOY_KEY     = "";
               };
             };
           })
@@ -385,8 +381,5 @@
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
       ];
     };
-
-    # Copy/paste for the rest of the fleet; ensure the attr name matches your hosts file.
-    # darwinConfigurations."a1" = mkHost { hostName = "a1s-Mac-Studio"; userName = "a1"; authorizedPubKeys = [ "ssh-ed25519 AAAA... key1" ]; };
   };
 }
