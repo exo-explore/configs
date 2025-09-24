@@ -146,35 +146,33 @@
               /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
             
-            # drop-in wrapper so logs are cleaner and failures are obvious
-            system.activationScripts.exoRunner.text = ''
-              cat > /opt/exo/.run-exo.sh <<'SH'
-              #!/usr/bin/env bash
-              set -euo pipefail
-              export EXO_NONINTERACTIVE=1
-              export TERM=dumb
-              cd /opt/exo
-              exec nix develop . \
-                --accept-flake-config \
-                --extra-experimental-features "nix-command flakes" \
-                --command uv run exo
-              SH
-              chmod +x /opt/exo/.run-exo.sh
-            '';
-
-            launchd.daemons."org.nixos.exo-service" = {
-              command = "${pkgs.bash}/bin/bash -lc '/opt/exo/.run-exo.sh'";
+            launchd.agents."org.nixos.exo-service" = {
+              # Run your exact command inside the repo's devShell
+              command = ''
+                ${pkgs.bash}/bin/bash -lc '
+                  cd /opt/exo
+                  ${pkgs.nix}/bin/nix develop . \
+                    --accept-flake-config \
+                    --extra-experimental-features "nix-command flakes" \
+                    --command uv run exo
+                '
+              '';
+            
               serviceConfig = {
-                  UserName = userName;
-                  WorkingDirectory = "/opt/exo";
-                  RunAtLoad = true;
-                  KeepAlive = true;
-                  StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
-                  StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
-                  ProcessType = "Background";
+                RunAtLoad = true;                # start at login
+                KeepAlive = true;                # restart if it exits
+                WorkingDirectory = "/opt/exo";
+                StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
+                StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
+                ProcessType = "Background";
+                EnvironmentVariables = {
+                  PYTHONUNBUFFERED = "1";
+                  TERM = "dumb";
+                  EXO_NONINTERACTIVE = "1";      # quiets noisy shellHooks if you gate on this
+                };
               };
             };
-            
+
             # ----- macOS defaults -----
             system.defaults = {
               NSGlobalDomain = {
@@ -194,7 +192,7 @@
                 ShowStatusBar = true;
               };
             };
-            
+
             # ----- Home Manager (user) -----
             home-manager.backupFileExtension = "pre-hm";
             home-manager.users.${userName} = { pkgs, ... }: {
