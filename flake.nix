@@ -136,19 +136,19 @@
 
             # ----- EXO: idiomatic LaunchAgent (no shell, no wrapper) -----
             launchd.agents."org.nixos.exo-service" = {
-              # Run inside the repo's devShell, then exec uv run exo
-              program = "${pkgs.nix}/bin/nix";
-              programArguments = [
+              # Optional PATH for the process
+              path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
+
+              serviceConfig = {
+                # Idiomatic: no shell, exec nix directly with arguments
+                ProgramArguments = [
+                "${pkgs.nix}/bin/nix"
                 "develop" "."
                 "--accept-flake-config"
                 "--extra-experimental-features" "nix-command flakes"
                 "--command" "${pkgs.uv}/bin/uv" "run" "exo"
-              ];
+                ];
 
-              # Provide PATH-like context to the agent process
-              path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
-
-              serviceConfig = {
                 WorkingDirectory = "/opt/exo";
                 RunAtLoad = true;
                 KeepAlive = true;
@@ -156,12 +156,13 @@
                 StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
                 ProcessType = "Background";
                 EnvironmentVariables = {
-                  PYTHONUNBUFFERED = "1";
-                  TERM = "dumb";
-                  EXO_NONINTERACTIVE = "1"; # if your shellHook checks this to silence banners
+                PYTHONUNBUFFERED = "1";
+                TERM = "dumb";
+                EXO_NONINTERACTIVE = "1";
                 };
               };
             };
+
 
             # ----- macOS defaults -----
             system.defaults = {
