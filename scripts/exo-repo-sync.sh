@@ -34,7 +34,3 @@ fi
 
 /usr/sbin/chown -R "$OWNER":staff "$DEST"
 
-# Optional: bounce your service after updates
-/bin/launchctl print system/org.nixos.exo-service >/dev/null 2>&1 && \
-  /bin/launchctl kickstart -k system/org.nixos.exo-service || true
-

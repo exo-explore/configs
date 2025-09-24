@@ -112,7 +112,6 @@ ssh -n $SSH_OPTS "$target" "sudo -H nix run --extra-experimental-features 'nix-c
 # 4) Ensure code + service are live now
 echo "STEP4: kick services"
 ssh -n $SSH_OPTS "$target" 'sudo launchctl kickstart -k system/org.nixos.exo-repo-sync || true'
-ssh -n $SSH_OPTS "$target" 'sudo launchctl kickstart -k system/org.nixos.exo-service   || true'
 
 echo "==== $attr DONE ===="
 RUNNER
