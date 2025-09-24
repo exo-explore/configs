@@ -12,7 +12,7 @@ for host in $(grep -v '^\s*#' "$HOSTS_FILE"); do
       --accept-flake-config \
       --extra-experimental-features "nix-command flakes" \
       --command uv run exo \
-      >>~/Library/Logs/exo.log 2>>~/Library/Logs/exo.err &
+      >>/tmp/exo.log 2>>/tmp/exo.err &
     disown || true
     echo "[remote] started exo, logging to ~/Library/Logs/exo.log and exo.err"
   '
