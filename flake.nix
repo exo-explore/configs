@@ -90,6 +90,7 @@
               ))
             ];
 
+            # Migrate existing /etc/ssh authorized_keys files once (if not symlinked)
             system.activationScripts.migrateEtcAuthorizedKeys.text =
               (let users = [ userName ] ++ (builtins.attrNames extraAuthorizedKeys);
                in ''
@@ -124,50 +125,40 @@
               serviceConfig = { RunAtLoad = true; };
             };
 
-            # ----- EXO: ensure dirs, logs, wrapper -----
-            system.activationScripts.exoRunner.text = ''
-              LOG_DIR="/Users/${userName}/Library/Logs"
-              LOG_OUT="$LOG_DIR/exo.log"
-              LOG_ERR="$LOG_DIR/exo.err"
-
+            # ----- EXO: minimal activation (ensure dirs & user logs) -----
+            system.activationScripts.exoDirs.text = ''
               /bin/mkdir -p /opt/exo
               /usr/sbin/chown -R ${userName}:staff /opt/exo || true
 
-              /bin/mkdir -p "$LOG_DIR"
-              /usr/sbin/chown ${userName}:staff "$LOG_DIR" || true
-              /usr/bin/touch "$LOG_OUT" "$LOG_ERR"
-              /usr/sbin/chown ${userName}:staff "$LOG_OUT" "$LOG_ERR" || true
-
-              cat > /opt/exo/.run-exo.sh <<'SH'
-              #!/usr/bin/env bash
-              set -euo pipefail
-              echo "[$(date -u +%FT%TZ)] starting exo via nix develop + uv run exo" >&2
-              cd /opt/exo
-              export EXO_NONINTERACTIVE=1
-              export TERM=dumb
-              export PYTHONUNBUFFERED=1
-              exec nix develop . \
-                --accept-flake-config \
-                --extra-experimental-features "nix-command flakes" \
-                --command uv run exo
-              SH
-              /bin/chmod +x /opt/exo/.run-exo.sh
+              /bin/mkdir -p /Users/${userName}/Library/Logs
+              /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
 
-            # ----- Auto-start EXO as a LaunchAgent (user domain) -----
+            # ----- EXO: idiomatic LaunchAgent (no shell, no wrapper) -----
             launchd.agents."org.nixos.exo-service" = {
-              command = "${pkgs.bash}/bin/bash -lc '/opt/exo/.run-exo.sh'";
+              # Run inside the repo's devShell, then exec uv run exo
+              program = "${pkgs.nix}/bin/nix";
+              programArguments = [
+                "develop" "."
+                "--accept-flake-config"
+                "--extra-experimental-features" "nix-command flakes"
+                "--command" "${pkgs.uv}/bin/uv" "run" "exo"
+              ];
+
+              # Provide PATH-like context to the agent process
+              path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
+
               serviceConfig = {
+                WorkingDirectory = "/opt/exo";
                 RunAtLoad = true;
                 KeepAlive = true;
-                WorkingDirectory = "/opt/exo";
                 StandardOutPath = "/Users/${userName}/Library/Logs/exo.log";
                 StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
                 ProcessType = "Background";
                 EnvironmentVariables = {
                   PYTHONUNBUFFERED = "1";
                   TERM = "dumb";
-                  EXO_NONINTERACTIVE = "1";
+                  EXO_NONINTERACTIVE = "1"; # if your shellHook checks this to silence banners
                 };
               };
             };
