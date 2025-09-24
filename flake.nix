@@ -13,7 +13,7 @@
       hostName,
       userName,
       userEmail ? "eng@exolabs.net",
-      system   ? "aarch64-darwin" # use "x86_64-darwin" for Intel
+      system   ? "aarch64-darwin"  # use "x86_64-darwin" for Intel
     }:
       darwin.lib.darwinSystem {
         inherit system;
@@ -21,17 +21,17 @@
           home-manager.darwinModules.home-manager
 
           ({ pkgs, lib, ... }: {
-            # --- Required by nix-darwin; don't bump casually ---
+            # ----- required by nix-darwin -----
             system.stateVersion = 5;
             system.primaryUser  = userName;
 
-            # Share nixpkgs between HM and system
+            # share pkgs between HM and system
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
             networking.hostName = hostName;
 
-            # --- Nix daemon settings ---
+            # ----- Nix -----
             nix = {
               package = pkgs.nix;
               settings = {
@@ -44,20 +44,20 @@
               };
             };
 
-            # --- Base tools ---
+            # ----- base tools -----
             programs.zsh.enable = true;
             environment.systemPackages = with pkgs; [
               git uv direnv nix-direnv coreutils jq tmux htop
             ];
 
-            # Ensure the macOS user exists with this short name
+            # ensure local macOS user exists
             users.users.${userName} = {
               home = "/Users/${userName}";
               isHidden = false;
               shell = pkgs.zsh;
             };
 
-            # --- SSH server (PASSWORD auth ENABLED for all users) ---
+            # ----- SSH (passwords allowed for all users) -----
             services.openssh = {
               enable = true;
               extraConfig = ''
@@ -65,8 +65,7 @@
                 PasswordAuthentication yes
                 KbdInteractiveAuthentication yes
                 UsePAM yes
-
-                # hardening while keeping passwords on
+                # hardening with passwords on
                 MaxAuthTries 3
                 LoginGraceTime 30s
                 MaxStartups 10:30:60
@@ -74,29 +73,29 @@
               '';
             };
 
-            # --- Passwordless sudo for admin group (for ops) ---
+            # ----- sudo w/o password for admin (ops convenience) -----
             environment.etc."sudoers.d/10-admin-nopasswd".text = ''
               %admin ALL=(ALL) NOPASSWD: ALL
             '';
 
-            # Avoid nix-darwin PAM symlink in /etc/pam.d (blocked on some macOS)
+            # avoid pam symlink issues on some macOS
             environment.etc."pam.d/sudo_local".enable = lib.mkForce false;
 
-            # --- Tailscale ---
+            # ----- Tailscale -----
             services.tailscale.enable = true;
 
-            # --- Power: stay awake ---
+            # ----- power: stay awake -----
             system.activationScripts.power.text = ''
               /usr/bin/pmset -a sleep 0 displaysleep 0 disksleep 0 >/dev/null 2>&1 || true
             '';
 
-            # --- Best-effort sysctl (many keys are read-only on macOS) ---
+            # ----- best-effort sysctl (may be read-only) -----
             launchd.daemons."sysctl-tunables" = {
               command = ''${pkgs.bash}/bin/bash -lc '/usr/sbin/sysctl -w net.inet.tcp.msl=1000 || true' '';
               serviceConfig = { RunAtLoad = true; };
             };
 
-            # --- EXO service: ensure dirs/logs exist; run `uv run exo` ---
+            # ----- EXO service: run from cloned repo as user -----
             system.activationScripts.exoDirs.text = ''
               mkdir -p /opt/exo
               chown -R ${userName}:staff /opt/exo || true
@@ -108,16 +107,18 @@
             launchd.daemons."org.nixos.exo-service" = {
               command = "${pkgs.uv}/bin/uv run exo";
               serviceConfig = {
+                UserName = userName;                  # run as login user
+                WorkingDirectory = "/opt/exo";        # run inside repo
                 RunAtLoad = true;
                 KeepAlive = true;
-                WorkingDirectory = "/opt/exo";
                 StandardOutPath = "/var/log/exo.log";
                 StandardErrorPath = "/var/log/exo.err";
                 ProcessType = "Background";
+                EnvironmentVariables = { PYTHONUNBUFFERED = "1"; };
               };
             };
 
-            # --- macOS defaults (tied to system.primaryUser) ---
+            # ----- macOS defaults -----
             system.defaults = {
               NSGlobalDomain = {
                 AppleShowAllExtensions = true;
@@ -137,7 +138,7 @@
               };
             };
 
-            # --- Home Manager (user-level config) ---
+            # ----- Home Manager (user) -----
             home-manager.backupFileExtension = "pre-hm";
             home-manager.users.${userName} = { pkgs, ... }: {
               home.stateVersion = "24.05";
@@ -177,9 +178,9 @@
           # --- Repo sync LaunchDaemon (reads scripts/exo-repo-sync.sh) ---
           (import ./modules/exo-repo-sync.nix)
 
-          # --- Per-host overrides ---
+          # --- per-host overrides ---
           ({ lib, ... }: {
-            # IP script defaults; override per host if needed
+            # IP config defaults (override per host if needed)
             launchd.daemons."exo-config-ip".serviceConfig.EnvironmentVariables = {
               WIFI_SERVICE = "Wi-Fi";
               LAN_PREFIX   = "192.168.1";
@@ -187,8 +188,7 @@
               # WIRED_SERVICE = "Thunderbolt Ethernet"; # optional pin
             };
 
-            # Repo sync: run as the login user, log to their Library/Logs,
-            # keep /opt/exo on latest origin/big-refactor via PAT (System or login keychain)
+            # Repo sync: run as user, log to user dir, keep /opt/exo on latest origin/big-refactor via PAT (System or login keychain)
             system.activationScripts.repoLogs.text = ''
               mkdir -p /Users/${userName}/Library/Logs
               chown ${userName}:staff /Users/${userName}/Library/Logs || true
@@ -196,8 +196,7 @@
             launchd.daemons."exo-repo-sync".serviceConfig = {
               UserName = userName;
               RunAtLoad = true;
-              StartInterval = 900; # every 15 min
-              # use mkForce in case the module provided defaults
+              StartInterval = 900;  # every 15 min
               StandardOutPath  = lib.mkForce "/Users/${userName}/Library/Logs/exo-repo-sync.log";
               StandardErrorPath = lib.mkForce "/Users/${userName}/Library/Logs/exo-repo-sync.err";
               EnvironmentVariables = {
@@ -205,25 +204,25 @@
                 EXO_REPO_URL_HTTPS = "https://github.com/exo-explore/exo-v2.git";
                 EXO_REPO_BRANCH    = "big-refactor";
                 EXO_REPO_DEST      = "/opt/exo";
-                EXO_REPO_OWNER     = userName;
-                EXO_DEPLOY_KEY     = ""; # empty -> PAT/HTTPS path used by script
+                EXO_REPO_OWNER     = userName;   # repo ownership
+                EXO_DEPLOY_KEY     = "";         # empty -> PAT/HTTPS path used by script
               };
             };
           })
         ];
       };
   in {
-    # --------- Define machines here ---------
+    # ----- define machines here -----
 
-    # Mike's Mac Studio
+    # Example host (mike)
     darwinConfigurations."mike" = mkHost {
-      hostName = "mikes-mac-studio-1"; # ideally matches `scutil --get LocalHostName`
+      hostName = "mikes-mac-studio-1";  # ideally matches `scutil --get LocalHostName`
       userName = "mike";
       userEmail = "eng@exolabs.net";
       system   = "aarch64-darwin";
     };
 
-    # Example second host (copy/adjust for your fleet)
+    # Copy/paste for others:
     # darwinConfigurations."a1s-Mac-Studio" = mkHost {
     #   hostName = "a1s-Mac-Studio";
     #   userName = "a1";
