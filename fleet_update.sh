@@ -76,6 +76,7 @@ echo "STEP1: prepare config dir"
 
 # 1) Ensure configs dir exists and is owned by the login user
 ssh -n $SSH_OPTS "$target" "sudo mkdir -p '$confdir' && sudo chown -R \$(id -un):staff '$confdir'"
+ssh -n $SSH_OPTS "$target" "sudo mkdir -p /opt/exo && sudo chown -R \$(id -un):staff /opt/exo"
 
 # 2) Clone or update configs ON THE HOST (use nix-provided git to avoid CLT prompts)
 echo "STEP2: sync repo (this may take a few minutes the first time)"
