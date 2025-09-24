@@ -1,26 +1,65 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOSTS_FILE="${1:-hosts.txt}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
-
-# Emit exactly one SSH target per line: second column if present, else first
-awk 'NF && $1 !~ /^#/ { print (NF==1 ? $1 : $2) }' "$HOSTS_FILE" |
-# read targets line-by-line; strip any trailing \r (Windows line endings)
-while IFS= read -r TARGET; do
-  TARGET="${TARGET%$'\r'}"
-  echo "=== $TARGET ==="
-  ssh -n \
-    -o IdentitiesOnly=yes -i "$SSH_KEY" \
-    -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes \
-    "$TARGET" /usr/bin/env bash -s <<'REMOTE'
-set -euo pipefail
-# If anything matching "exo" is running, kill it (macOS/BSD pkill syntax)
-if /usr/bin/pgrep -f "exo" >/dev/null 2>&1; then
-  echo "[remote] killing processes matching: exo"
-  /usr/bin/pkill -9 -f "exo" || true
-else
-  echo "[remote] nothing to kill"
+###############################################################################
+# Args & prerequisites
+###############################################################################
+if [[ $# -gt 1 ]]; then
+  echo "Usage: $0 [hosts_file]" >&2
+  exit 1
 fi
-REMOTE
+HOSTS_FILE=${1:-hosts.txt}
+
+###############################################################################
+# Load hosts.txt (works on macOS Bash 3.2 and Bash 4+)
+###############################################################################
+if [[ ! -f "$HOSTS_FILE" ]]; then
+  echo "Error: $HOSTS_FILE not found"
+  exit 1
+fi
+
+if builtin command -v mapfile >/dev/null 2>&1; then
+  mapfile -t HOSTS <"$HOSTS_FILE"
+else
+  HOSTS=()
+  while IFS= read -r h; do
+    [[ -n "$h" ]] && HOSTS+=("$h")
+  done <"$HOSTS_FILE"
+fi
+[[ ${#HOSTS[@]} -gt 0 ]] || {
+  echo "No hosts found in $HOSTS_FILE"
+  exit 1
+}
+
+###############################################################################
+# Helper – run a remote command and capture rc/stderr/stdout
+###############################################################################
+ssh_opts=(-o StrictHostKeyChecking=no
+  -o LogLevel=ERROR)
+
+run_remote() { # $1 host   $2 command
+  local host=$1 cmd=$2 rc
+  if ssh "${ssh_opts[@]}" "$host" "$cmd"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  return $rc
+}
+
+###############################################################################
+# Kill exo everywhere (parallel)
+###############################################################################
+echo "=== Killing exo on ${#HOSTS[@]} host(s) ==="
+fail=0
+for h in "${HOSTS[@]}"; do
+  (
+    run_remote "$h" 'pkill -f exo || true'
+  ) || fail=1 &
 done
+wait
+((fail == 0)) || {
+  echo "❌ Some hosts could not be reached—check SSH access."
+  exit 1
+}
+echo "✓ exo processes killed on all reachable hosts."
