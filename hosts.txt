@@ -1,0 +1,16 @@
+a1 a1@a1s-mac-studio.local
+a2 a2@a2s-mac-studio.local
+a3 a3@a3s-mac-studio.local
+a4 a4@a4s-mac-studio.local
+a5 a5@a5s-mac-studio.local
+a6 a6@a6s-mac-studio.local
+a7 a7@a7s-mac-studio.local
+a8 a8@a8s-mac-studio.local
+a9 a9@a9s-mac-studio.local
+a10 a10@a10s-mac-studio.local
+a11 a11@a11s-mac-studio.local
+a12 a12@a12s-mac-studio.local
+a13 a13@a13s-mac-studio.local
+a14 a14@a14s-mac-studio.local
+a15 a15@a15s-mac-studio.local
+a16 a16@a16s-mac-studio.local
