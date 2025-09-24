@@ -100,6 +100,19 @@
               ))
             ];
 
+            # Safely migrate any pre-existing /etc/ssh/authorized_keys/* files once
+            system.activationScripts.migrateEtcAuthorizedKeys.text =
+              (let users = [ userName ] ++ (builtins.attrNames extraAuthorizedKeys);
+               in ''
+                 /bin/mkdir -p /etc/ssh/authorized_keys
+                 for u in ${lib.concatStringsSep " " users}; do
+                   f="/etc/ssh/authorized_keys/$u"
+                   if [ -e "$f" ] && [ ! -L "$f" ]; then
+                     /bin/mv "$f" "$f.before-nix-darwin" || true
+                   fi
+                 done
+               '');
+
             # ----- Tailscale -----
             services.tailscale.enable = true;
 
