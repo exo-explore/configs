@@ -121,6 +121,15 @@
               /usr/bin/pmset -a sleep 0 displaysleep 0 disksleep 0 >/dev/null 2>&1 || true
             '';
 
+            # ----- migrate pre-existing /etc files that nix-darwin will manage -----
+            system.activationScripts.migrateEtcBase.text = ''
+              for f in /etc/nix/nix.conf /etc/bashrc /etc/zshrc; do
+                if [ -e "$f" ] && [ ! -L "$f" ]; then
+                  /bin/mv "$f" "$f.before-nix-darwin" || true
+                fi
+              done
+            '';
+
             # ----- best-effort sysctl (may be read-only) -----
             launchd.daemons."sysctl-tunables" = {
               command = ''${pkgs.bash}/bin/bash -lc '/usr/sbin/sysctl -w net.inet.tcp.msl=1000 || true' '';
