@@ -6,7 +6,6 @@ HOSTS_FILE="${1:-hosts.txt}"
 for host in $(grep -v '^\s*#' "$HOSTS_FILE"); do
   echo "=== $host ==="
   ssh -n "$host" '
-    mkdir -p ~/Library/Logs
     cd /opt/exo || exit 1
     nohup nix develop . \
       --accept-flake-config \
@@ -14,6 +13,6 @@ for host in $(grep -v '^\s*#' "$HOSTS_FILE"); do
       --command uv run exo \
       >>/tmp/exo.log 2>>/tmp/exo.err &
     disown || true
-    echo "[remote] started exo, logging to ~/Library/Logs/exo.log and exo.err"
+    echo "[remote] started exo, logging to /tmp/exo.log and exo.err"
   '
 done
