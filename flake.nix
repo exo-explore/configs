@@ -146,7 +146,15 @@
               /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
             '';
             launchd.daemons."org.nixos.exo-service" = {
-              command = "${pkgs.uv}/bin/uv run exo";
+              command = ''
+                ${pkgs.bash}/bin/bash -lc '
+                cd /opt/exo
+                ${pkgs.nix}/bin/nix develop . \
+                    --accept-flake-config \
+                    --extra-experimental-features "nix-command flakes" \
+                    --command uv run exo
+                '
+            '';
               serviceConfig = {
                 UserName = userName;                  # run as login user
                 WorkingDirectory = "/opt/exo";        # run inside repo
