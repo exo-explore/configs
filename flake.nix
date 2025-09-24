@@ -125,45 +125,6 @@
               serviceConfig = { RunAtLoad = true; };
             };
 
-            # ----- EXO: minimal activation (ensure dirs & user logs) -----
-            system.activationScripts.exoDirs.text = ''
-              /bin/mkdir -p /opt/exo
-              /usr/sbin/chown -R ${userName}:staff /opt/exo || true
-
-              /bin/mkdir -p /Users/${userName}/Library/Logs
-              /usr/sbin/chown ${userName}:staff /Users/${userName}/Library/Logs || true
-            '';
-
-            # headless/always-on service: system LaunchDaemon (runs as the login user)
-            launchd.daemons."org.nixos.exo-service" = {
-            path = [ pkgs.nix pkgs.uv pkgs.python3 pkgs.coreutils ];
-            serviceConfig = {
-              UserName = userName;                 # run as the login user
-              WorkingDirectory = "/opt/exo";
-
-              ProgramArguments = [
-                "${pkgs.nix}/bin/nix"
-                "develop" "."
-                "--accept-flake-config"
-                "--extra-experimental-features" "nix-command flakes"
-                "--command" "${pkgs.uv}/bin/uv" "run" "exo"
-              ];
-
-              RunAtLoad = true;
-              KeepAlive = true;
-
-              StandardOutPath  = "/Users/${userName}/Library/Logs/exo.log";
-              StandardErrorPath = "/Users/${userName}/Library/Logs/exo.err";
-              ProcessType = "Background";
-              EnvironmentVariables = {
-                PYTHONUNBUFFERED = "1";
-                TERM = "dumb";
-                EXO_NONINTERACTIVE = "1";  # if your devShell shellHook respects this to stay quiet
-              };
-            };
-            };
-
-
             # ----- macOS defaults -----
             system.defaults = {
               NSGlobalDomain = {
@@ -212,8 +173,7 @@
               };
 
               home.shellAliases = {
-                exo-dev     = "nix develop -c uv run exo";
-                exo-restart = "launchctl kickstart -k gui/$(id -u)/org.nixos.exo-service";
+                exo-dev = "nix develop -c uv run exo";
               };
             };
           })
@@ -228,7 +188,6 @@
               WIFI_SERVICE = "Wi-Fi";
               LAN_PREFIX   = "192.168.1";
               NETMASK      = "255.255.255.0";
-              # WIRED_SERVICE = "Thunderbolt Ethernet";
             };
 
             # Repo sync as user -> /opt/exo
