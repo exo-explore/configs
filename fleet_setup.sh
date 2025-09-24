@@ -77,7 +77,7 @@ SSH_OPTS='-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=
 echo "==> [2/3] Installing Nix (daemon mode) + enabling flakes (idempotent)"
 while read -r _ target; do
   [[ -z "$target" ]] && continue
-  ssh -tt $SSH_OPTS "$target" "bash -lc '
+  ssh -tt -n $SSH_OPTS "$target" "bash -lc '
     set -e
     if ! command -v nix >/dev/null 2>&1 || [ ! -d /nix/store ]; then
       sudo touch /etc/synthetic.conf && sudo chown root:wheel /etc/synthetic.conf && sudo chmod 0644 /etc/synthetic.conf
@@ -95,7 +95,7 @@ done < "$norm_list"
 echo "==> [3/3] Seeding GitHub PAT into System.keychain + kicking repo sync"
 while read -r _ target; do
   [[ -z "$target" ]] && continue
-  ssh -tt $SSH_OPTS "$target" "bash -lc '
+  ssh -tt -n $SSH_OPTS "$target" "bash -lc '
     set -e
     sudo /usr/bin/security delete-generic-password -s exo-github-pat /Library/Keychains/System.keychain >/dev/null 2>&1 || true
     sudo /usr/bin/security add-generic-password -s exo-github-pat -a x-access-token -w '"$GH_PAT"' -A /Library/Keychains/System.keychain
