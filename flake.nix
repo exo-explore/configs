@@ -1,5 +1,5 @@
 {
-  description = "EXO macOS fleet via nix-darwin (+ Home Manager) with IP + repo sync daemons (SSH passwords allowed)";
+  description = "EXO macOS fleet via nix-darwin (+ Home Manager) with IP + repo sync daemons (SSH passwords allowed, multi-pubkey)";
 
   inputs = {
     nixpkgs.url       = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -9,11 +9,14 @@
 
   outputs = { self, nixpkgs, darwin, home-manager, ... }:
   let
+    # mkHost supports multiple SSH pubkeys for the login user, and extra keys for other users.
     mkHost = {
       hostName,
       userName,
       userEmail ? "eng@exolabs.net",
-      system   ? "aarch64-darwin"  # use "x86_64-darwin" for Intel
+      system   ? "aarch64-darwin",
+      authorizedPubKeys ? [],                     # list of public key lines for ${userName}
+      extraAuthorizedKeys ? {}                    # attrset: { "otheruser" = [ "ssh-ed25519 ...", ... ]; }
     }:
       darwin.lib.darwinSystem {
         inherit system;
@@ -26,7 +29,7 @@
             system.primaryUser  = userName;
 
             # share pkgs between HM and system
-            home-manager.useGlobalPkgs = true;
+            home-manager.useGlobalPkgs   = true;
             home-manager.useUserPackages = true;
 
             networking.hostName = hostName;
@@ -57,7 +60,7 @@
               shell = pkgs.zsh;
             };
 
-            # ----- SSH (passwords allowed for all users) -----
+            # ----- SSH (passwords allowed; also support /etc per-user authorized_keys) -----
             services.openssh = {
               enable = true;
               extraConfig = ''
@@ -65,13 +68,29 @@
                 PasswordAuthentication yes
                 KbdInteractiveAuthentication yes
                 UsePAM yes
-                # hardening with passwords on
+                # hardening while keeping passwords on
                 MaxAuthTries 3
                 LoginGraceTime 30s
                 MaxStartups 10:30:60
                 PermitEmptyPasswords no
+                # read per-user keys from /etc too
+                AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys2 /etc/ssh/authorized_keys/%u
               '';
             };
+
+            # Install authorized keys for the login user (can be multiple lines)
+            environment.etc."ssh/authorized_keys/${userName}".text =
+              lib.concatStringsSep "\n" authorizedPubKeys + "\n";
+
+            # Extra users' authorized keys (optional)
+            environment.etc = lib.mkMerge (
+              lib.mapAttrsToList
+                (uname: keys: {
+                  name  = "ssh/authorized_keys/${uname}";
+                  value = { text = lib.concatStringsSep "\n" keys + "\n"; };
+                })
+                extraAuthorizedKeys
+            );
 
             # ----- sudo w/o password for admin (ops convenience) -----
             environment.etc."sudoers.d/10-admin-nopasswd".text = ''
@@ -166,7 +185,7 @@
               };
 
               home.shellAliases = {
-                exo-dev = "nix develop -c uv run exo";
+                exo-dev     = "nix develop -c uv run exo";
                 exo-restart = "sudo launchctl kickstart -k system/org.nixos.exo-service";
               };
             };
@@ -212,22 +231,28 @@
         ];
       };
   in {
-    # ----- define machines here -----
-
-    # Example host (mike)
+    # ===== hosts =====
     darwinConfigurations."mike" = mkHost {
-      hostName = "mikes-mac-studio-1";  # ideally matches `scutil --get LocalHostName`
+      hostName = "mikes-mac-studio-1";
       userName = "mike";
       userEmail = "eng@exolabs.net";
       system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
+    };
+    darwinConfigurations."a4" = mkHost {
+      hostName = "a4s-mac-studio";
+      userName = "a4";
+      userEmail = "eng@exolabs.net";
+      system   = "aarch64-darwin";
+      authorizedPubKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPRB5fd0UnQKnBwtZ+WWNy6smS14AoHVMjzLARenI/O garyexo@outlook.com"
+      ];
     };
 
-    # Copy/paste for others:
-    # darwinConfigurations."a1s-Mac-Studio" = mkHost {
-    #   hostName = "a1s-Mac-Studio";
-    #   userName = "a1";
-    #   userEmail = "eng@exolabs.net";
-    #   system   = "aarch64-darwin";
-    # };
+    # Copy/paste for the rest of the fleet; ensure the attr name matches your hosts file.
+    # darwinConfigurations."a1" = mkHost { hostName = "a1s-Mac-Studio"; userName = "a1"; authorizedPubKeys = [ "ssh-ed25519 AAAA... key1" ]; };
   };
 }
+
