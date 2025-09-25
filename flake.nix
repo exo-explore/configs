@@ -181,10 +181,6 @@
           # --- EXO modules you already use ---
           (import ./modules/exo-config-ip.nix)
           (import ./modules/exo-repo-sync.nix)
-          (import ./modules/exo-screen-sharing.nix {
-            usersAllowed = [ userName ];   # allow the login user for that host
-            groupsAllowed = [ "admin" ];   # keep admin group too (or remove if you want user-only)
-          })
 
 
           # --- Per-host overrides ---
