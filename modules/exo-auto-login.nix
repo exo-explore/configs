@@ -1,5 +1,4 @@
 # modules/exo-auto-login.nix
-# Usage from flake: (import ./modules/exo-auto-login.nix { autoLoginUser = userName; })
 { autoLoginUser ? null, keychainService ? "exo-autologin-pass", requireFileVaultOff ? true }:
 { lib, pkgs, ... }:
 
@@ -19,19 +18,19 @@ let
     fi
 
     # 2) Resolve password from System keychain or env
-    PW="$(/usr/bin/security find-generic-password -s "${keychainService}-${USER}" -w /Library/Keychains/System.keychain 2>/dev/null || true)"
-    if [ -z "$PW" ] && [ -n "${AUTOLOGIN_PASS:-}" ]; then
-      PW="$AUTOLOGIN_PASS"
+    PW="$(/usr/bin/security find-generic-password -s "${keychainService}-\${USER}" -w /Library/Keychains/System.keychain 2>/dev/null || true)"
+    if [ -z "$PW" ] && [ -n "\${AUTOLOGIN_PASS:-}" ]; then
+      PW="\${AUTOLOGIN_PASS}"
     fi
     if [ -z "$PW" ]; then
-      echo "auto-login: no password found in System keychain (service='${keychainService}-${USER}') and AUTOLOGIN_PASS not set → skipping."
+      echo "auto-login: no password found in System keychain (service='${keychainService}-\${USER}') and AUTOLOGIN_PASS not set → skipping."
       exit 0
     fi
 
-    # 3) Write /Library/Preferences/com.apple.loginwindow autoLoginUser
+    # 3) Write autoLoginUser
     /usr/bin/defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser -string "$USER" || true
 
-    # 4) Generate /etc/kcpassword (Apple’s XOR scheme)
+    # 4) Generate /etc/kcpassword
     /usr/bin/python3 - "$PW" <<'PY' | /usr/bin/tee /etc/kcpassword >/dev/null
 import sys
 pw = sys.argv[1]
@@ -54,4 +53,3 @@ in
     ${script}
   '';
 }
-
